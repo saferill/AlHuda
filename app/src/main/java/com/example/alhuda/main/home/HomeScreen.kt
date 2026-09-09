@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -69,6 +70,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.alhuda.core.domain.model.PrayerTime
 import com.example.alhuda.main.location.LocationScreen
+import com.example.alhuda.main.settings.SettingsScreen
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 
@@ -78,6 +80,7 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showLocationScreen by remember { mutableStateOf(false) }
+    var showSettingsScreen by remember { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     // Auto-refresh permission state when returning from Android Settings
@@ -119,10 +122,18 @@ fun HomeScreen(
                 viewModel.loadPrayerTimes()
             }
         )
+    } else if (showSettingsScreen) {
+        SettingsScreen(
+            onNavigateBack = {
+                showSettingsScreen = false
+                viewModel.loadPrayerTimes()
+            }
+        )
     } else {
         HomeContent(
             uiState = uiState,
             onOpenLocation = { showLocationScreen = true },
+            onOpenSettings = { showSettingsScreen = true },
             onDismissBatteryBanner = { viewModel.dismissBatteryBanner() },
             onTestAlarm = { seconds, prayerName ->
                 viewModel.testAlarmInSeconds(seconds, prayerName)
@@ -136,6 +147,7 @@ fun HomeScreen(
 private fun HomeContent(
     uiState: HomeUiState,
     onOpenLocation: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     onDismissBatteryBanner: () -> Unit = {},
     onTestAlarm: (Long, String) -> Unit = { _, _ -> }
 ) {
@@ -181,6 +193,13 @@ private fun HomeContent(
                         Icon(
                             imageVector = Icons.Default.LocationOn,
                             contentDescription = "Ubah Lokasi",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Pengaturan",
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }

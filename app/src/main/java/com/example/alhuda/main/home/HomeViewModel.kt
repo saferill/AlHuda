@@ -7,6 +7,7 @@ import com.example.alhuda.core.domain.alarm.AlarmScheduler
 import com.example.alhuda.core.domain.model.FavoriteLocation
 import com.example.alhuda.core.domain.model.LocationCoordinates
 import com.example.alhuda.core.domain.model.PrayerTime
+import com.example.alhuda.core.domain.repository.AppSettingsRepository
 import com.example.alhuda.core.domain.repository.FavoriteLocationsRepository
 import com.example.alhuda.core.domain.repository.PrayerTimeRepository
 import com.example.alhuda.core.util.android.BatteryUtils
@@ -16,6 +17,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
@@ -25,6 +27,7 @@ import javax.inject.Inject
 class HomeViewModel @Inject constructor(
     private val prayerTimeRepository: PrayerTimeRepository,
     private val favoriteLocationsRepository: FavoriteLocationsRepository,
+    private val appSettingsRepository: AppSettingsRepository,
     private val alarmScheduler: AlarmScheduler,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -34,6 +37,24 @@ class HomeViewModel @Inject constructor(
 
     init {
         loadPrayerTimes()
+        observeSettingsChanges()
+    }
+
+    private fun observeSettingsChanges() {
+        viewModelScope.launch {
+            // Drop initial emission to avoid redundant initial recalculation
+            appSettingsRepository.getSettings().drop(1).collect {
+                val state = _uiState.value
+                val lat = state.latitude
+                val lng = state.longitude
+                if (lat != null && lng != null && !state.needsLocationSelection) {
+                    calculateAndSchedule(
+                        coordinates = LocationCoordinates(lat, lng),
+                        label = state.locationName
+                    )
+                }
+            }
+        }
     }
 
     fun refreshPermissionsState() {

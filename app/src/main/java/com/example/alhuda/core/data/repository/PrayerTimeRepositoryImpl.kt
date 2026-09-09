@@ -21,11 +21,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.Date
-import javax.inject.Inject
-import javax.inject.Singleton
-
-@Singleton
-class PrayerTimeRepositoryImpl @Inject constructor(
+class PrayerTimeRepositoryImpl(
     private val dataStore: DataStore<Preferences>,
     private val appSettingsRepository: AppSettingsRepository
 ) : PrayerTimeRepository {
@@ -35,6 +31,7 @@ class PrayerTimeRepositoryImpl @Inject constructor(
         private val KEY_LONGITUDE = doublePreferencesKey("longitude")
     }
 
+    @OptIn(kotlin.time.ExperimentalTime::class)
     override suspend fun getTodayPrayerTimes(location: LocationCoordinates): List<PrayerTime> {
         val settings = appSettingsRepository.getSettings().firstOrNull()
         val appMethod = settings?.calculationMethod ?: AppCalculationMethod.KEMENAG_INDONESIA
@@ -48,15 +45,15 @@ class PrayerTimeRepositoryImpl @Inject constructor(
         val prayerTimes = PrayerTimes(coordinates, dateComponents, calculationParameters)
         val zoneId = ZoneId.systemDefault()
 
-        fun Date.toLocalDateTime(): LocalDateTime =
-            Instant.ofEpochMilli(this.time).atZone(zoneId).toLocalDateTime()
+        fun kotlinx.datetime.Instant.toJavaLocalDateTime(): LocalDateTime =
+            java.time.Instant.ofEpochMilli(this.toEpochMilliseconds()).atZone(zoneId).toLocalDateTime()
 
         return listOf(
-            PrayerTime(name = "Subuh", time = prayerTimes.fajr.toLocalDateTime()),
-            PrayerTime(name = "Dzuhur", time = prayerTimes.dhuhr.toLocalDateTime()),
-            PrayerTime(name = "Ashar", time = prayerTimes.asr.toLocalDateTime()),
-            PrayerTime(name = "Maghrib", time = prayerTimes.maghrib.toLocalDateTime()),
-            PrayerTime(name = "Isya", time = prayerTimes.isha.toLocalDateTime())
+            PrayerTime(name = "Subuh", time = prayerTimes.fajr.toJavaLocalDateTime()),
+            PrayerTime(name = "Dzuhur", time = prayerTimes.dhuhr.toJavaLocalDateTime()),
+            PrayerTime(name = "Ashar", time = prayerTimes.asr.toJavaLocalDateTime()),
+            PrayerTime(name = "Maghrib", time = prayerTimes.maghrib.toJavaLocalDateTime()),
+            PrayerTime(name = "Isya", time = prayerTimes.isha.toJavaLocalDateTime())
         )
     }
 

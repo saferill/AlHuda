@@ -14,11 +14,16 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
 
-    @Binds
-    @Singleton
-    abstract fun bindPrayerTimeRepository(
-        impl: PrayerTimeRepositoryImpl
-    ): PrayerTimeRepository
+    companion object {
+        @dagger.Provides
+        @Singleton
+        fun providePrayerTimeRepository(
+            dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
+            appSettingsRepository: com.example.alhuda.core.domain.repository.AppSettingsRepository
+        ): PrayerTimeRepository {
+            return PrayerTimeRepositoryImpl(dataStore, appSettingsRepository)
+        }
+    }
 
     @Binds
     @Singleton
