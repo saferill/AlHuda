@@ -9,4 +9,5 @@ sealed interface SettingsUiAction {
     data class SelectAdhanAudio(val context: Context, val uri: Uri) : SettingsUiAction
     object ResetAdhanAudio : SettingsUiAction
     data class TogglePreview(val context: Context) : SettingsUiAction
+    data class ToggleGlobalPrayer(val prayerName: String) : SettingsUiAction
 }

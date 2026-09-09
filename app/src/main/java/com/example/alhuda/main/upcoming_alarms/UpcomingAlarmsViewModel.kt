@@ -27,43 +27,45 @@ class UpcomingAlarmsViewModel @Inject constructor(
     val uiState: StateFlow<UpcomingAlarmsUiState> = _uiState.asStateFlow()
 
     init {
-        loadUpcomingAlarms()
+        loadUpcomingAlarms(_uiState.value.viewingDate)
         observeSettingsChanges()
     }
 
     private fun observeSettingsChanges() {
         viewModelScope.launch {
             appSettingsRepository.getSettings().collect {
-                loadUpcomingAlarms()
+                loadUpcomingAlarms(_uiState.value.viewingDate)
             }
         }
     }
 
     fun onAction(action: UpcomingAlarmsUiAction) {
         when (action) {
-            is UpcomingAlarmsUiAction.TogglePrayerEnabled -> {
-                togglePrayerEnabled(action.prayerName)
+            is UpcomingAlarmsUiAction.ChangeViewingDate -> {
+                _uiState.update { it.copy(viewingDate = action.date) }
+                loadUpcomingAlarms(action.date)
             }
-            is UpcomingAlarmsUiAction.ToggleSkipOccurrence -> {
-                toggleSkipOccurrence(action.prayerName, action.date)
+            is UpcomingAlarmsUiAction.ToggleDateOverride -> {
+                toggleDateOverride(action.prayerName, action.date, action.isEnabled)
             }
             is UpcomingAlarmsUiAction.Refresh -> {
-                loadUpcomingAlarms()
+                loadUpcomingAlarms(_uiState.value.viewingDate)
             }
         }
     }
 
-    fun loadUpcomingAlarms() {
+    fun loadUpcomingAlarms(date: LocalDate = _uiState.value.viewingDate) {
         viewModelScope.launch {
             try {
-                appSettingsRepository.cleanExpiredSkippedOccurrences()
+                appSettingsRepository.cleanExpiredDateOverrides()
                 val selectedLoc = favoriteLocationsRepository.getSelectedLocation()
                 val locationLabel = selectedLoc?.label ?: "Lokasi Tersimpan"
 
-                val list = getUpcomingAlarmsUseCase()
+                val list = getUpcomingAlarmsUseCase(date)
 
                 _uiState.update {
                     it.copy(
+                        viewingDate = date,
                         alarms = list,
                         locationName = locationLabel,
                         isLoading = false,
@@ -74,23 +76,16 @@ class UpcomingAlarmsViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = e.localizedMessage ?: "Gagal memuat alarm mendatang"
+                        errorMessage = e.localizedMessage ?: "Gagal memuat jadwal & alarm"
                     )
                 }
             }
         }
     }
 
-    private fun togglePrayerEnabled(prayerName: String) {
+    private fun toggleDateOverride(prayerName: String, date: LocalDate, isEnabled: Boolean) {
         viewModelScope.launch {
-            appSettingsRepository.togglePrayerEnabled(prayerName)
-            schedulerReconciler.reconcileAll()
-        }
-    }
-
-    private fun toggleSkipOccurrence(prayerName: String, date: LocalDate) {
-        viewModelScope.launch {
-            appSettingsRepository.toggleSkipOccurrence(prayerName, date)
+            appSettingsRepository.setDateOverride(prayerName, date, isEnabled)
             schedulerReconciler.reconcileAll()
         }
     }

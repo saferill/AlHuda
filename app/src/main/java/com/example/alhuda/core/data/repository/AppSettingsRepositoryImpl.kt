@@ -7,7 +7,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.example.alhuda.core.domain.model.AppCalculationMethod
 import com.example.alhuda.core.domain.model.AppSettings
-import com.example.alhuda.core.domain.model.SkippedOccurrence
 import com.example.alhuda.core.domain.repository.AppSettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -25,7 +24,7 @@ class AppSettingsRepositoryImpl @Inject constructor(
         private val KEY_ADHAN_SOUND_URI = stringPreferencesKey("app_adhan_sound_uri")
         private val KEY_ADHAN_SOUND_NAME = stringPreferencesKey("app_adhan_sound_name")
         private val KEY_ENABLED_PRAYERS = stringSetPreferencesKey("app_enabled_prayers")
-        private val KEY_SKIPPED_OCCURRENCES = stringSetPreferencesKey("app_skipped_occurrences")
+        private val KEY_DATE_OVERRIDES = stringSetPreferencesKey("app_date_overrides")
         private val DEFAULT_ENABLED_PRAYERS = setOf("Subuh", "Dzuhur", "Ashar", "Maghrib", "Isya")
     }
 
@@ -43,15 +42,20 @@ class AppSettingsRepositoryImpl @Inject constructor(
             val adhanName = prefs[KEY_ADHAN_SOUND_NAME]
             val enabledPrayers = prefs[KEY_ENABLED_PRAYERS] ?: DEFAULT_ENABLED_PRAYERS
 
-            val rawSkipped = prefs[KEY_SKIPPED_OCCURRENCES] ?: emptySet()
-            val skippedOccurrences = rawSkipped.mapNotNull { SkippedOccurrence.fromSerializedString(it) }.toSet()
+            val rawOverrides = prefs[KEY_DATE_OVERRIDES] ?: emptySet()
+            val dateOverrides = rawOverrides.mapNotNull { entry ->
+                val parts = entry.split("=")
+                if (parts.size == 2) {
+                    parts[0] to parts[1].toBoolean()
+                } else null
+            }.toMap()
 
             AppSettings(
                 calculationMethod = method,
                 adhanSoundUri = adhanUri,
                 adhanSoundName = adhanName,
                 enabledPrayers = enabledPrayers,
-                skippedOccurrences = skippedOccurrences
+                dateOverrides = dateOverrides
             )
         }
     }
@@ -70,7 +74,7 @@ class AppSettingsRepositoryImpl @Inject constructor(
                 prefs.remove(KEY_ADHAN_SOUND_NAME)
             }
             prefs[KEY_ENABLED_PRAYERS] = settings.enabledPrayers
-            prefs[KEY_SKIPPED_OCCURRENCES] = settings.skippedOccurrences.map { it.toSerializedString() }.toSet()
+            prefs[KEY_DATE_OVERRIDES] = settings.dateOverrides.map { "${it.key}=${it.value}" }.toSet()
         }
     }
 
@@ -95,7 +99,7 @@ class AppSettingsRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun togglePrayerEnabled(prayerName: String) {
+    override suspend fun toggleGlobalPrayerEnabled(prayerName: String) {
         dataStore.edit { prefs ->
             val current = (prefs[KEY_ENABLED_PRAYERS] ?: DEFAULT_ENABLED_PRAYERS).toMutableSet()
             if (current.contains(prayerName)) {
@@ -107,28 +111,31 @@ class AppSettingsRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun toggleSkipOccurrence(prayerName: String, date: LocalDate) {
-        val target = SkippedOccurrence(prayerName, date).toSerializedString()
+    override suspend fun setDateOverride(prayerName: String, date: LocalDate, isEnabled: Boolean) {
+        val key = "${prayerName}_${date}"
         dataStore.edit { prefs ->
-            val current = (prefs[KEY_SKIPPED_OCCURRENCES] ?: emptySet()).toMutableSet()
-            if (current.contains(target)) {
-                current.remove(target)
-            } else {
-                current.add(target)
-            }
-            prefs[KEY_SKIPPED_OCCURRENCES] = current
+            val current = (prefs[KEY_DATE_OVERRIDES] ?: emptySet()).toMutableSet()
+            current.removeAll { it.startsWith("${key}=") }
+            current.add("${key}=${isEnabled}")
+            prefs[KEY_DATE_OVERRIDES] = current
         }
     }
 
-    override suspend fun cleanExpiredSkippedOccurrences() {
+    override suspend fun cleanExpiredDateOverrides() {
         val today = LocalDate.now()
         dataStore.edit { prefs ->
-            val current = prefs[KEY_SKIPPED_OCCURRENCES] ?: emptySet()
-            val valid = current.filter { str ->
-                val occ = SkippedOccurrence.fromSerializedString(str)
-                occ != null && !occ.date.isBefore(today)
+            val current = prefs[KEY_DATE_OVERRIDES] ?: emptySet()
+            val valid = current.filter { entry ->
+                try {
+                    val key = entry.substringBefore("=")
+                    val dateStr = key.substringAfter("_")
+                    val date = LocalDate.parse(dateStr)
+                    !date.isBefore(today)
+                } catch (e: Exception) {
+                    false
+                }
             }.toSet()
-            prefs[KEY_SKIPPED_OCCURRENCES] = valid
+            prefs[KEY_DATE_OVERRIDES] = valid
         }
     }
 }

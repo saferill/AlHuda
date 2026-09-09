@@ -40,6 +40,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -64,6 +66,8 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+
+    val prayerList = listOf("Subuh", "Dzuhur", "Ashar", "Maghrib", "Isya")
 
     // Audio file picker launcher (ACTION_OPEN_DOCUMENT)
     val audioPickerLauncher = rememberLauncherForActivityResult(
@@ -115,7 +119,102 @@ fun SettingsScreen(
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                // 1. SECTION: METODE KALKULASI SHOLAT
+                // 1. SECTION: SHOLAT YANG DIBERI ALARM (GLOBAL DEFAULTS)
+                item {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Sholat yang Diberi Alarm",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Pengaturan alarm permanen (default global) untuk setiap waktu sholat.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            prayerList.forEachIndexed { index, prayer ->
+                                val isEnabled = uiState.enabledPrayers.contains(prayer)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .clip(CircleShape)
+                                                .background(
+                                                    if (isEnabled) MaterialTheme.colorScheme.primaryContainer
+                                                    else MaterialTheme.colorScheme.surfaceVariant
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Notifications,
+                                                contentDescription = null,
+                                                tint = if (isEnabled) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(
+                                            text = prayer,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+
+                                    Switch(
+                                        checked = isEnabled,
+                                        onCheckedChange = {
+                                            viewModel.onAction(SettingsUiAction.ToggleGlobalPrayer(prayer))
+                                        },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                            checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                                        )
+                                    )
+                                }
+                                if (index < prayerList.size - 1) {
+                                    androidx.compose.material3.HorizontalDivider(
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                                        thickness = 0.8.dp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "ℹ️ Bisa di-override sementara per hari di halaman Jadwal & Alarm.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // 2. SECTION: METODE KALKULASI SHOLAT
                 item {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -129,7 +228,7 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                 }
 
                 items(AppCalculationMethod.entries) { method ->
@@ -188,9 +287,9 @@ fun SettingsScreen(
                     }
                 }
 
-                // 2. SECTION: SUARA ADZAN
+                // 3. SECTION: SUARA ADZAN
                 item {
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Suara Adzan",
                         style = MaterialTheme.typography.titleMedium,
@@ -198,11 +297,11 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "Pilih suara adzan default atau gunakan file audio kustom (MP3/WAV/M4A) dari perangkat Anda.",
+                        text = "Pilih file MP3 khusus dari penyimpanan HP Anda sebagai suara adzan.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -217,19 +316,21 @@ fun SettingsScreen(
                                 .padding(16.dp)
                         ) {
                             Row(
+                                modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(44.dp)
+                                        .size(42.dp)
                                         .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primaryContainer),
+                                        .background(MaterialTheme.colorScheme.secondaryContainer),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Notifications,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
@@ -240,20 +341,19 @@ fun SettingsScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
-                                        text = uiState.adhanSoundName
-                                            ?: "Default (Adzan Makkah & Subuh Khusus)",
+                                        text = uiState.adhanSoundName ?: "Default (Suara Built-in)",
                                         style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold,
+                                        fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(14.dp))
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 Button(
                                     onClick = {
@@ -262,7 +362,7 @@ fun SettingsScreen(
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(10.dp)
                                 ) {
-                                    Text("Pilih Audio")
+                                    Text("Pilih File MP3")
                                 }
 
                                 OutlinedButton(

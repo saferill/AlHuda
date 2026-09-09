@@ -6,5 +6,5 @@ data class UpcomingAlarmItem(
     val prayerName: String,
     val dateTime: LocalDateTime,
     val isEnabled: Boolean,
-    val isSkipped: Boolean
+    val isPastDate: Boolean = false
 )

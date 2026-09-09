@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
 import android.util.Log
+import com.example.alhuda.core.domain.model.isPrayerActiveOnDate
 import com.example.alhuda.core.domain.repository.AppSettingsRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -22,11 +23,12 @@ class AlarmReceiver : BroadcastReceiver() {
 
     companion object {
         const val EXTRA_PRAYER_NAME = "extra_prayer_name"
+        private const val TAG = "AlarmReceiver"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         val prayerName = intent.getStringExtra(EXTRA_PRAYER_NAME) ?: "Sholat"
-        Log.d("AlarmReceiver", "AlarmReceiver ON_RECEIVE dipanggil untuk $prayerName!")
+        Log.d(TAG, "AlarmReceiver ON_RECEIVE dipanggil untuk $prayerName")
 
         val pendingResult = goAsync()
 
@@ -39,22 +41,22 @@ class AlarmReceiver : BroadcastReceiver() {
                     null
                 }
 
-                // Cek apakah alarm untuk sholat ini dinonaktifkan secara permanen
-                val enabledPrayers = settings?.enabledPrayers ?: setOf("Subuh", "Dzuhur", "Ashar", "Maghrib", "Isya")
-                val isEnabled = enabledPrayers.any { it.equals(prayerName, ignoreCase = true) }
-                if (!isEnabled) {
-                    Log.d("AlarmReceiver", "Alarm untuk $prayerName dinonaktifkan permanen di pengaturan. Trigger dibatalkan.")
-                    return@launch
-                }
-
-                // Cek apakah alarm untuk sholat hari ini di-skip sekali
                 val today = LocalDate.now()
-                val isSkipped = settings?.skippedOccurrences?.any {
-                    it.prayerName.equals(prayerName, ignoreCase = true) && it.date == today
-                } == true
+                val enabledPrayers = settings?.enabledPrayers ?: setOf("Subuh", "Dzuhur", "Ashar", "Maghrib", "Isya")
+                val dateOverrides = settings?.dateOverrides ?: emptyMap()
 
-                if (isSkipped) {
-                    Log.d("AlarmReceiver", "Alarm untuk $prayerName dilewati untuk tanggal $today. Trigger dibatalkan.")
+                // Cek status aktif menggunakan isPrayerActiveOnDate (override tanggal dulu, fallback ke global)
+                val isActive = isPrayerActiveOnDate(
+                    prayer = prayerName,
+                    date = today,
+                    enabledPrayers = enabledPrayers,
+                    dateOverrides = dateOverrides
+                )
+
+                Log.d(TAG, "Cek status $prayerName pada $today: isActive=$isActive (overrides=$dateOverrides, global=$enabledPrayers)")
+
+                if (!isActive) {
+                    Log.d(TAG, "Alarm untuk $prayerName pada tanggal $today dinonaktifkan. Trigger dibatalkan.")
                     return@launch
                 }
 
@@ -86,9 +88,9 @@ class AlarmReceiver : BroadcastReceiver() {
 
                 try {
                     context.startActivity(activityIntent)
-                    Log.d("AlarmReceiver", "startActivity AdhanAlarmActivity berhasil dieksekusi.")
+                    Log.d(TAG, "startActivity AdhanAlarmActivity berhasil dieksekusi.")
                 } catch (e: Exception) {
-                    Log.e("AlarmReceiver", "Gagal memanggil startActivity: ${e.message}")
+                    Log.e(TAG, "Gagal memanggil startActivity: ${e.message}")
                 }
             } finally {
                 pendingResult.finish()

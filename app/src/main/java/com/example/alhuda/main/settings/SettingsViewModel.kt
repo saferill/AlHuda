@@ -35,6 +35,7 @@ class SettingsViewModel @Inject constructor(
                         selectedMethod = settings.calculationMethod,
                         adhanSoundUri = settings.adhanSoundUri,
                         adhanSoundName = settings.adhanSoundName,
+                        enabledPrayers = settings.enabledPrayers,
                         isLoading = false
                     )
                 }
@@ -56,28 +57,35 @@ class SettingsViewModel @Inject constructor(
             is SettingsUiAction.TogglePreview -> {
                 togglePreview(action.context)
             }
+            is SettingsUiAction.ToggleGlobalPrayer -> {
+                toggleGlobalPrayer(action.prayerName)
+            }
+        }
+    }
+
+    private fun toggleGlobalPrayer(prayerName: String) {
+        viewModelScope.launch {
+            appSettingsRepository.toggleGlobalPrayerEnabled(prayerName)
+            schedulerReconciler.reconcileAll()
         }
     }
 
     private fun selectCalculationMethod(method: AppCalculationMethod) {
         viewModelScope.launch {
             appSettingsRepository.updateCalculationMethod(method)
-            // Reschedule alarms immediately with new calculation times
             schedulerReconciler.reconcileAll()
         }
     }
 
     private fun selectAdhanAudio(context: Context, uri: Uri) {
         viewModelScope.launch {
-            // Take persistent URI permission
             try {
                 val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION
                 context.contentResolver.takePersistableUriPermission(uri, takeFlags)
             } catch (e: Exception) {
-                // If persistent permission fails on some content schemes, proceed anyway
+                // Ignore if not supported
             }
 
-            // Get audio file name
             val fileName = getFileName(context, uri) ?: uri.lastPathSegment ?: "Audio Pilihan"
 
             appSettingsRepository.updateAdhanSound(
