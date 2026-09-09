@@ -31,4 +31,10 @@ abstract class RepositoryModule {
     abstract fun bindGeoInfoRepository(
         impl: com.example.alhuda.core.data.repository.GeoInfoRepositoryImpl
     ): com.example.alhuda.core.domain.repository.GeoInfoRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAppSettingsRepository(
+        impl: com.example.alhuda.core.data.repository.AppSettingsRepositoryImpl
+    ): com.example.alhuda.core.domain.repository.AppSettingsRepository
 }

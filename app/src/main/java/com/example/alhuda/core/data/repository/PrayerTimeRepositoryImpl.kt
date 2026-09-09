@@ -1,18 +1,19 @@
 package com.example.alhuda.core.data.repository
 
-import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
-import com.batoulapps.adhan.CalculationMethod
-import com.batoulapps.adhan.Coordinates
-import com.batoulapps.adhan.PrayerTimes
-import com.batoulapps.adhan.data.DateComponents
+import com.example.alhuda.core.domain.model.AppCalculationMethod
 import com.example.alhuda.core.domain.model.LocationCoordinates
 import com.example.alhuda.core.domain.model.PrayerTime
+import com.example.alhuda.core.domain.repository.AppSettingsRepository
 import com.example.alhuda.core.domain.repository.PrayerTimeRepository
-import dagger.hilt.android.qualifiers.ApplicationContext
+import io.github.meypod.adhan_kotlin.CalculationMethod
+import io.github.meypod.adhan_kotlin.CalculationParameters
+import io.github.meypod.adhan_kotlin.Coordinates
+import io.github.meypod.adhan_kotlin.PrayerTimes
+import io.github.meypod.adhan_kotlin.data.DateComponents
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import java.time.Instant
@@ -25,7 +26,8 @@ import javax.inject.Singleton
 
 @Singleton
 class PrayerTimeRepositoryImpl @Inject constructor(
-    private val dataStore: DataStore<Preferences>
+    private val dataStore: DataStore<Preferences>,
+    private val appSettingsRepository: AppSettingsRepository
 ) : PrayerTimeRepository {
 
     companion object {
@@ -34,12 +36,16 @@ class PrayerTimeRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getTodayPrayerTimes(location: LocationCoordinates): List<PrayerTime> {
+        val settings = appSettingsRepository.getSettings().firstOrNull()
+        val appMethod = settings?.calculationMethod ?: AppCalculationMethod.KEMENAG_INDONESIA
+
+        val calculationParameters = getCalculationParameters(appMethod)
+
         val coordinates = Coordinates(location.latitude, location.longitude)
         val today = LocalDate.now()
         val dateComponents = DateComponents(today.year, today.monthValue, today.dayOfMonth)
-        val params = CalculationMethod.MUSLIM_WORLD_LEAGUE.parameters
 
-        val prayerTimes = PrayerTimes(coordinates, dateComponents, params)
+        val prayerTimes = PrayerTimes(coordinates, dateComponents, calculationParameters)
         val zoneId = ZoneId.systemDefault()
 
         fun Date.toLocalDateTime(): LocalDateTime =
@@ -52,6 +58,17 @@ class PrayerTimeRepositoryImpl @Inject constructor(
             PrayerTime(name = "Maghrib", time = prayerTimes.maghrib.toLocalDateTime()),
             PrayerTime(name = "Isya", time = prayerTimes.isha.toLocalDateTime())
         )
+    }
+
+    private fun getCalculationParameters(method: AppCalculationMethod): CalculationParameters {
+        return when (method) {
+            AppCalculationMethod.KEMENAG_INDONESIA -> CalculationMethod.KEMENAG.parameters
+            AppCalculationMethod.MUSLIM_WORLD_LEAGUE -> CalculationMethod.MUSLIM_WORLD_LEAGUE.parameters
+            AppCalculationMethod.UMM_AL_QURA -> CalculationMethod.UMM_AL_QURA.parameters
+            AppCalculationMethod.EGYPTIAN -> CalculationMethod.EGYPTIAN.parameters
+            AppCalculationMethod.KARACHI -> CalculationMethod.KARACHI.parameters
+            AppCalculationMethod.SINGAPORE -> CalculationMethod.SINGAPORE.parameters
+        }
     }
 
     override suspend fun saveLastLocation(location: LocationCoordinates) {
