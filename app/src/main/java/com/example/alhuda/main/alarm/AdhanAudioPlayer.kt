@@ -11,21 +11,32 @@ object AdhanAudioPlayer {
     private var mediaPlayer: MediaPlayer? = null
 
     @Synchronized
-    fun play(context: Context) {
+    fun play(context: Context, prayerName: String = "Sholat") {
         stop()
 
         try {
+            val isFajr = prayerName.contains("subuh", ignoreCase = true) ||
+                         prayerName.contains("fajr", ignoreCase = true)
+
+            val audioResId = if (isFajr) {
+                Log.d("AdhanAudioPlayer", "Memutar suara khusus Adzan Subuh (Fajr)")
+                R.raw.adhan_fajr
+            } else {
+                Log.d("AdhanAudioPlayer", "Memutar suara Adzan reguler ($prayerName)")
+                R.raw.adhan_sound
+            }
+
             val audioAttributes = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ALARM)
                 .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                 .build()
 
-            mediaPlayer = MediaPlayer.create(context.applicationContext, R.raw.adhan_sound).apply {
+            mediaPlayer = MediaPlayer.create(context.applicationContext, audioResId).apply {
                 setAudioAttributes(audioAttributes)
                 isLooping = true
                 start()
             }
-            Log.d("AdhanAudioPlayer", "Adhan audio started looping.")
+            Log.d("AdhanAudioPlayer", "Adhan audio started looping for $prayerName.")
         } catch (e: Exception) {
             Log.e("AdhanAudioPlayer", "Error playing adhan audio: ${e.message}")
         }

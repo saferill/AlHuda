@@ -27,8 +27,8 @@ class AlarmReceiver : BroadcastReceiver() {
         )
         wakeLock?.acquire(30000) // Tahan wake lock selama 30 detik
 
-        // 2. Putar suara adzan looping
-        AdhanAudioPlayer.play(context)
+        // 2. Putar suara adzan looping sesuai waktu sholat (Subuh vs non-Subuh)
+        AdhanAudioPlayer.play(context, prayerName)
 
         // 3. Tampilkan notifikasi dengan Full Screen Intent
         NotificationHelper.showAdhanNotification(context, prayerName)

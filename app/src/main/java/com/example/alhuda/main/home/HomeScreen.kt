@@ -90,8 +90,8 @@ fun HomeScreen(
         HomeContent(
             uiState = uiState,
             onOpenLocation = { showLocationScreen = true },
-            onTestAlarm = { seconds ->
-                viewModel.testAlarmInSeconds(seconds)
+            onTestAlarm = { seconds, prayerName ->
+                viewModel.testAlarmInSeconds(seconds, prayerName)
             }
         )
     }
@@ -102,7 +102,7 @@ fun HomeScreen(
 private fun HomeContent(
     uiState: HomeUiState,
     onOpenLocation: () -> Unit,
-    onTestAlarm: (Long) -> Unit = {}
+    onTestAlarm: (Long, String) -> Unit = { _, _ -> }
 ) {
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
     val snackbarHostState = remember { SnackbarHostState() }
@@ -257,16 +257,32 @@ private fun HomeContent(
                                         color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
                                     )
                                     Spacer(modifier = Modifier.height(12.dp))
-                                    Button(
-                                        onClick = {
-                                            onTestAlarm(5)
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar("Alarm dijadwalkan! Kunci layar dan tunggu 5 detik...")
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth()
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        Text("Set Alarm Dummy (5 Detik ke depan)")
+                                        Button(
+                                            onClick = {
+                                                onTestAlarm(5, "Subuh")
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar("Alarm Adzan Subuh dijadwalkan (5 dtk)! Kunci layar HP...")
+                                                }
+                                            },
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("Test Subuh", maxLines = 1)
+                                        }
+                                        Button(
+                                            onClick = {
+                                                onTestAlarm(5, "Dzuhur")
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar("Alarm Adzan Reguler dijadwalkan (5 dtk)! Kunci layar HP...")
+                                                }
+                                            },
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("Test Dzuhur/Lain", maxLines = 1)
+                                        }
                                     }
                                 }
                             }

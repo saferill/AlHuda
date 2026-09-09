@@ -3,13 +3,13 @@ package com.example.alhuda.main.home
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.alhuda.core.domain.alarm.AlarmScheduler
 import com.example.alhuda.core.domain.model.FavoriteLocation
 import com.example.alhuda.core.domain.model.LocationCoordinates
 import com.example.alhuda.core.domain.model.PrayerTime
 import com.example.alhuda.core.domain.repository.FavoriteLocationsRepository
 import com.example.alhuda.core.domain.repository.PrayerTimeRepository
 import com.example.alhuda.core.util.android.LocationUtils
+import com.example.alhuda.core.domain.alarm.AlarmScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
 
@@ -28,7 +29,7 @@ class HomeViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(HomeUiState(isLoading = true))
+    private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     init {
@@ -39,12 +40,13 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
-            // 1. Cek lokasi tersimpan dari FavoriteLocationsRepository
-            val savedLocation = favoriteLocationsRepository.getSelectedLocation()
-            if (savedLocation != null) {
-                calculateAndScheduleTimes(
-                    coordinates = LocationCoordinates(savedLocation.latitude, savedLocation.longitude),
-                    label = savedLocation.label
+            // 1. Coba ambil dari lokasi yang dipilih di FavoriteLocationsRepository
+            val selectedFav: FavoriteLocation? = favoriteLocationsRepository.getSelectedLocation()
+
+            if (selectedFav != null) {
+                calculateAndSchedule(
+                    coordinates = LocationCoordinates(selectedFav.latitude, selectedFav.longitude),
+                    label = selectedFav.label
                 )
                 return@launch
             }
@@ -52,40 +54,38 @@ class HomeViewModel @Inject constructor(
             // 2. Jika belum ada lokasi tersimpan, coba minta lokasi GPS asli
             val gpsResult = LocationUtils.requestCurrentLocation(context)
             gpsResult.onSuccess { loc ->
-                val autoLoc = FavoriteLocation(
-                    id = "gps_current",
-                    label = "Lokasi GPS Saat Ini",
+                val newFav = FavoriteLocation(
+                    id = "gps_default",
+                    label = "Lokasi Saat Ini (GPS)",
                     latitude = loc.latitude,
                     longitude = loc.longitude,
                     isSelected = true
                 )
-                favoriteLocationsRepository.saveLocation(autoLoc)
-                calculateAndScheduleTimes(
+                favoriteLocationsRepository.saveLocation(newFav)
+                calculateAndSchedule(
                     coordinates = LocationCoordinates(loc.latitude, loc.longitude),
-                    label = autoLoc.label
+                    label = "Lokasi Saat Ini (GPS)"
                 )
-            }.onFailure { _ ->
-                // Jika permission ditolak atau GPS tidak aktif dan belum ada lokasi
+            }.onFailure { err ->
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         needsLocationSelection = true,
-                        errorMessage = "Lokasi belum ditentukan. Silakan aktifkan izin lokasi GPS atau pilih lokasi manual."
+                        errorMessage = "Izin lokasi belum diberikan atau lokasi belum aktif."
                     )
                 }
             }
         }
     }
 
-    private suspend fun calculateAndScheduleTimes(
+    private suspend fun calculateAndSchedule(
         coordinates: LocationCoordinates,
         label: String
     ) {
         try {
             val times = prayerTimeRepository.getTodayPrayerTimes(coordinates)
-            // Simpan juga ke prayerTimeRepository untuk boot rescheduling
-            prayerTimeRepository.saveLastLocation(coordinates)
-            // Jadwalkan alarm waktu sholat
+
+            // Jadwalkan alarm notifikasi adzan untuk semua waktu sholat
             alarmScheduler.rescheduleAllAlarms(times)
 
             _uiState.update {
@@ -112,11 +112,11 @@ class HomeViewModel @Inject constructor(
     /**
      * Helper untuk testing: Menjadwalkan alarm dummy beberapa detik ke depan
      */
-    fun testAlarmInSeconds(seconds: Long = 5) {
+    fun testAlarmInSeconds(seconds: Long = 5, prayerName: String = "Dzuhur") {
         val testTime = LocalDateTime.now().plusSeconds(seconds)
         alarmScheduler.scheduleAlarm(
             PrayerTime(
-                name = "Test Adzan ($seconds detik)",
+                name = prayerName,
                 time = testTime
             )
         )
