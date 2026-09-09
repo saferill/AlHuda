@@ -14,17 +14,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -35,18 +40,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.alhuda.core.domain.model.PrayerTime
-import com.example.alhuda.core.presentation.theme.AlHudaTheme
+import com.example.alhuda.main.location.LocationScreen
 import kotlinx.coroutines.launch
-import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 @Composable
@@ -54,30 +59,49 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var showLocationScreen by remember { mutableStateOf(false) }
 
-    // Runtime permission request untuk Android 13+ (POST_NOTIFICATIONS)
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { _ -> }
-
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    // Runtime permissions launcher untuk Notifications dan Coarse Location
+    val permissionsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val locationGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (locationGranted) {
+            viewModel.loadPrayerTimes()
         }
     }
 
-    HomeContent(
-        uiState = uiState,
-        onTestAlarm = { seconds ->
-            viewModel.testAlarmInSeconds(seconds)
+    LaunchedEffect(Unit) {
+        val permissionsToRequest = mutableListOf(Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
         }
-    )
+        permissionsLauncher.launch(permissionsToRequest.toTypedArray())
+    }
+
+    if (showLocationScreen) {
+        LocationScreen(
+            onNavigateBack = {
+                showLocationScreen = false
+                viewModel.loadPrayerTimes()
+            }
+        )
+    } else {
+        HomeContent(
+            uiState = uiState,
+            onOpenLocation = { showLocationScreen = true },
+            onTestAlarm = { seconds ->
+                viewModel.testAlarmInSeconds(seconds)
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeContent(
     uiState: HomeUiState,
+    onOpenLocation: () -> Unit,
     onTestAlarm: (Long) -> Unit = {}
 ) {
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
@@ -95,10 +119,33 @@ private fun HomeContent(
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
-                        Text(
-                            text = uiState.locationName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (uiState.locationName.isNotBlank())
+                                    uiState.locationName
+                                else
+                                    "Lokasi Belum Ditentukan",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onOpenLocation) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = "Ubah Lokasi",
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 },
@@ -119,15 +166,55 @@ private fun HomeContent(
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
-                uiState.errorMessage != null -> {
-                    Text(
-                        text = uiState.errorMessage,
-                        color = MaterialTheme.colorScheme.error,
+
+                uiState.needsLocationSelection -> {
+                    // Tampilan jika permission lokasi ditolak dan belum ada lokasi tersimpan
+                    Card(
                         modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(16.dp)
-                    )
+                            .fillMaxWidth()
+                            .padding(20.dp)
+                            .align(Alignment.Center),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Lokasi Belum Diatur",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Izin lokasi belum diberikan atau GPS tidak aktif. Silakan pilih lokasi secara manual atau aktifkan GPS agar jadwal sholat akurat.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.9f)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = onOpenLocation,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Pilih / Input Lokasi Manual")
+                            }
+                        }
+                    }
                 }
+
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -174,7 +261,7 @@ private fun HomeContent(
                                         onClick = {
                                             onTestAlarm(5)
                                             scope.launch {
-                                                snackbarHostState.showSnackbar("Alarm dijadwalkan! Tunggu 5 detik...")
+                                                snackbarHostState.showSnackbar("Alarm dijadwalkan! Kunci layar dan tunggu 5 detik...")
                                             }
                                         },
                                         modifier = Modifier.fillMaxWidth()
@@ -223,28 +310,5 @@ private fun PrayerTimeItem(
                 color = MaterialTheme.colorScheme.primary
             )
         }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun HomeContentPreview() {
-    val now = LocalDateTime.now()
-    val dummyTimes = listOf(
-        PrayerTime("Subuh", now.withHour(4).withMinute(45)),
-        PrayerTime("Dzuhur", now.withHour(12).withMinute(5)),
-        PrayerTime("Ashar", now.withHour(15).withMinute(20)),
-        PrayerTime("Maghrib", now.withHour(18).withMinute(10)),
-        PrayerTime("Isya", now.withHour(19).withMinute(20))
-    )
-
-    AlHudaTheme {
-        HomeContent(
-            uiState = HomeUiState(
-                prayerTimes = dummyTimes,
-                locationName = "Jakarta",
-                isLoading = false
-            )
-        )
     }
 }
