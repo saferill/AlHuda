@@ -10,15 +10,18 @@ import com.example.alhuda.core.domain.model.PrayerTime
 import com.example.alhuda.core.domain.repository.AppSettingsRepository
 import com.example.alhuda.core.domain.repository.FavoriteLocationsRepository
 import com.example.alhuda.core.domain.repository.PrayerTimeRepository
+import com.example.alhuda.core.domain.usecase.GetNextPrayerUseCase
 import com.example.alhuda.core.util.android.BatteryUtils
 import com.example.alhuda.core.util.android.LocationUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import javax.inject.Inject
@@ -28,6 +31,7 @@ class HomeViewModel @Inject constructor(
     private val prayerTimeRepository: PrayerTimeRepository,
     private val favoriteLocationsRepository: FavoriteLocationsRepository,
     private val appSettingsRepository: AppSettingsRepository,
+    private val getNextPrayerUseCase: GetNextPrayerUseCase,
     private val alarmScheduler: AlarmScheduler,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -35,9 +39,57 @@ class HomeViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
+    private var tickerJob: Job? = null
+
     init {
         loadPrayerTimes()
         observeSettingsChanges()
+        startTicker()
+    }
+
+    private fun startTicker() {
+        tickerJob?.cancel()
+        tickerJob = viewModelScope.launch {
+            while (isActive) {
+                delay(1000L)
+                tickCountdown()
+            }
+        }
+    }
+
+    private suspend fun tickCountdown() {
+        val state = _uiState.value
+        val next = state.nextPrayer
+        if (next != null) {
+            val nowInstant = java.time.Instant.now()
+            val remaining = java.time.Duration.between(nowInstant, next.prayerTime).seconds
+            if (remaining <= 0) {
+                updateNextPrayer()
+            } else {
+                _uiState.update {
+                    it.copy(remainingSeconds = remaining)
+                }
+            }
+        } else {
+            updateNextPrayer()
+        }
+    }
+
+    private suspend fun updateNextPrayer() {
+        val state = _uiState.value
+        val lat = state.latitude
+        val lng = state.longitude
+        if (lat != null && lng != null && !state.needsLocationSelection) {
+            val nextPrayerInfo = getNextPrayerUseCase(
+                targetCoordinates = LocationCoordinates(lat, lng)
+            )
+            _uiState.update {
+                it.copy(
+                    nextPrayer = nextPrayerInfo,
+                    remainingSeconds = nextPrayerInfo?.remainingSeconds ?: 0L
+                )
+            }
+        }
     }
 
     private fun observeSettingsChanges() {
@@ -126,10 +178,13 @@ class HomeViewModel @Inject constructor(
         try {
             val times = prayerTimeRepository.getTodayPrayerTimes(coordinates)
 
-            // Jadwalkan alarm notifikasi adzan untuk semua waktu sholat
             val isScheduled = alarmScheduler.rescheduleAllAlarms(times)
             val canScheduleExact = alarmScheduler.canScheduleExactAlarms()
             val isIgnoringBattery = BatteryUtils.isIgnoringBatteryOptimizations(context)
+
+            val nextPrayerInfo = getNextPrayerUseCase(
+                targetCoordinates = coordinates
+            )
 
             _uiState.update {
                 it.copy(
@@ -141,6 +196,8 @@ class HomeViewModel @Inject constructor(
                     needsLocationSelection = false,
                     isExactAlarmPermissionGranted = canScheduleExact,
                     isIgnoringBatteryOptimizations = isIgnoringBattery,
+                    nextPrayer = nextPrayerInfo,
+                    remainingSeconds = nextPrayerInfo?.remainingSeconds ?: 0L,
                     errorMessage = null
                 )
             }

@@ -7,6 +7,20 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +59,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -63,6 +78,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -75,7 +91,9 @@ import com.example.alhuda.main.location.LocationScreen
 import com.example.alhuda.main.settings.SettingsScreen
 import com.example.alhuda.main.upcoming_alarms.UpcomingAlarmsScreen
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Composable
 fun HomeScreen(
@@ -448,31 +466,60 @@ private fun HomeContent(
                                             Brush.verticalGradient(
                                                 colors = listOf(
                                                     MaterialTheme.colorScheme.primary,
-                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
                                                 )
                                             )
                                         )
-                                        .padding(24.dp)
+                                        .padding(horizontal = 20.dp, vertical = 18.dp)
                                 ) {
-                                    Column {
-                                        Text(
-                                            text = "Lokasi Aktif",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = Color.White.copy(alpha = 0.8f)
-                                        )
-                                        Text(
-                                            text = uiState.locationName.ifBlank { "Mencari Lokasi..." },
-                                            style = MaterialTheme.typography.titleLarge,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
-                                        )
-
-                                        if (uiState.latitude != null && uiState.longitude != null) {
-                                            Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // Info Lokasi & Tanggal (Kiri)
+                                        Column(
+                                            modifier = Modifier.weight(1f)
+                                        ) {
                                             Text(
-                                                text = "Koordinat: ${"%.4f".format(uiState.latitude)}, ${"%.4f".format(uiState.longitude)}",
+                                                text = "Lokasi Aktif",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color.White.copy(alpha = 0.75f)
+                                            )
+                                            Text(
+                                                text = uiState.locationName.ifBlank { "Mencari Lokasi..." },
+                                                style = MaterialTheme.typography.titleLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                maxLines = 1
+                                            )
+
+                                            val todayDateFormatter = remember {
+                                                DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy", Locale("id", "ID"))
+                                            }
+                                            Spacer(modifier = Modifier.height(3.dp))
+                                            Text(
+                                                text = LocalDate.now().format(todayDateFormatter),
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = Color.White.copy(alpha = 0.7f)
+                                                color = Color.White.copy(alpha = 0.85f)
+                                            )
+
+                                            if (uiState.latitude != null && uiState.longitude != null) {
+                                                Spacer(modifier = Modifier.height(6.dp))
+                                                Text(
+                                                    text = "Koordinat: ${"%.4f".format(uiState.latitude)}, ${"%.4f".format(uiState.longitude)}",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                    color = Color.White.copy(alpha = 0.65f)
+                                                )
+                                            }
+                                        }
+
+                                        // Countdown Card Sholat Berikutnya (Kanan)
+                                        if (uiState.nextPrayer != null) {
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            NextPrayerCountdownWidget(
+                                                prayerName = uiState.nextPrayer.prayerName,
+                                                totalSeconds = uiState.remainingSeconds
                                             )
                                         }
                                     }
@@ -678,3 +725,133 @@ private fun PrayerTimeItem(
         }
     }
 }
+
+@Composable
+private fun NextPrayerCountdownWidget(
+    prayerName: String,
+    totalSeconds: Long,
+    modifier: Modifier = Modifier
+) {
+    val hours = (totalSeconds / 3600).coerceAtLeast(0)
+    val minutes = ((totalSeconds % 3600) / 60).coerceAtLeast(0)
+    val seconds = (totalSeconds % 60).coerceAtLeast(0)
+
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "beaconAlpha"
+    )
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White.copy(alpha = 0.16f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.28f))
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Header: Pulse Beacon + Nama Sholat
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF81C784).copy(alpha = pulseAlpha))
+                )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(
+                    text = prayerName,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1
+                )
+            }
+
+            Spacer(modifier = Modifier.height(5.dp))
+
+            // Digital Counter Row (Jam : Menit : Detik)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                TimeUnitBox(value = hours, label = "JAM")
+                Text(
+                    text = ":",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(horizontal = 2.dp)
+                )
+                TimeUnitBox(value = minutes, label = "MNT")
+                Text(
+                    text = ":",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(horizontal = 2.dp)
+                )
+                TimeUnitBox(value = seconds, label = "DTK")
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimeUnitBox(
+    value: Long,
+    label: String
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = Color.Black.copy(alpha = 0.25f),
+            modifier = Modifier
+                .width(28.dp)
+                .height(26.dp)
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                AnimatedContent(
+                    targetState = value,
+                    transitionSpec = {
+                        (slideInVertically { height -> -height } + fadeIn()).togetherWith(
+                            slideOutVertically { height -> height } + fadeOut()
+                        ).using(SizeTransform(clip = false))
+                    },
+                    label = "timeDigit"
+                ) { targetVal ->
+                    Text(
+                        text = String.format("%02d", targetVal),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 7.5.sp),
+            fontWeight = FontWeight.Medium,
+            color = Color.White.copy(alpha = 0.75f)
+        )
+    }
+}
+

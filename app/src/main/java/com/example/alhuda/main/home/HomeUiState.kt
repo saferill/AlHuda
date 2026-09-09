@@ -1,5 +1,6 @@
 package com.example.alhuda.main.home
 
+import com.example.alhuda.core.domain.model.NextPrayerInfo
 import com.example.alhuda.core.domain.model.PrayerTime
 
 /**
@@ -16,5 +17,8 @@ data class HomeUiState(
     val isIgnoringBatteryOptimizations: Boolean = true,
     val isBatteryBannerDismissed: Boolean = false,
     val enabledPrayersCount: Int = 5,
+    val nextPrayer: NextPrayerInfo? = null,
+    val remainingSeconds: Long = 0L,
     val errorMessage: String? = null
 )
+
