@@ -12,6 +12,11 @@ class AlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val prayerName = intent.getStringExtra(EXTRA_PRAYER_NAME) ?: "Sholat"
-        NotificationHelper.showNotification(context, prayerName)
+
+        // 1. Putar suara adzan looping sampai user mematikan / menunda
+        AdhanAudioPlayer.play(context)
+
+        // 2. Munculkan full screen intent ke AdhanAlarmActivity dan notifikasi fallback
+        NotificationHelper.showAdhanNotification(context, prayerName)
     }
 }

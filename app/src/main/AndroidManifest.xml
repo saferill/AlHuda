@@ -2,10 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Permissions for Alarm and Notifications -->
+    <!-- Permissions for Alarm, Notifications, and LockScreen Full Screen Intent -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:name=".AlHudaApp"
@@ -26,6 +28,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Full-Screen LockScreen Adhan Alarm Activity -->
+        <activity
+            android:name=".main.alarm.AdhanAlarmActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:showOnLockScreen="true"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.AlHuda" />
 
         <!-- Alarm Receiver -->
         <receiver

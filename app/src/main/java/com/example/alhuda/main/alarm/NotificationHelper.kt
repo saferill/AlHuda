@@ -8,14 +8,13 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import com.example.alhuda.MainActivity
-import com.example.alhuda.R
 
 object NotificationHelper {
 
     const val CHANNEL_ID = "adhan_channel"
     private const val CHANNEL_NAME = "Notifikasi Adzan"
     private const val CHANNEL_DESCRIPTION = "Pengingat waktu sholat dan adzan"
+    const val NOTIFICATION_ID_BASE = 1000
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -26,6 +25,7 @@ object NotificationHelper {
             ).apply {
                 description = CHANNEL_DESCRIPTION
                 enableVibration(true)
+                setSound(null, null) // Suara di-handle oleh AdhanAudioPlayer (MediaPlayer loop)
             }
 
             val notificationManager =
@@ -34,17 +34,21 @@ object NotificationHelper {
         }
     }
 
-    fun showNotification(context: Context, prayerName: String) {
+    fun showAdhanNotification(context: Context, prayerName: String) {
         createNotificationChannel(context)
 
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        // Full Screen Intent menuju AdhanAlarmActivity
+        val fullScreenIntent = Intent(context, AdhanAlarmActivity::class.java).apply {
+            putExtra(AdhanAlarmActivity.EXTRA_PRAYER_NAME, prayerName)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
 
-        val pendingIntent = PendingIntent.getActivity(
+        val fullScreenPendingIntent = PendingIntent.getActivity(
             context,
             prayerName.hashCode(),
-            intent,
+            fullScreenIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -52,17 +56,28 @@ object NotificationHelper {
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle("Waktunya $prayerName")
             .setContentText("Telah masuk waktu sholat $prayerName. Mari tunaikan sholat.")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
+            .setAutoCancel(false)
+            .setOngoing(true)
+            .setContentIntent(fullScreenPendingIntent)
+            .setFullScreenIntent(fullScreenPendingIntent, true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
 
         val notificationManager = NotificationManagerCompat.from(context)
         try {
-            notificationManager.notify(prayerName.hashCode(), notification)
+            notificationManager.notify(getNotificationId(prayerName), notification)
         } catch (e: SecurityException) {
-            // Permission POST_NOTIFICATIONS may not be granted
+            // Permission POST_NOTIFICATIONS
         }
     }
+
+    fun dismissNotification(context: Context, prayerName: String) {
+        val notificationManager = NotificationManagerCompat.from(context)
+        notificationManager.cancel(getNotificationId(prayerName))
+    }
+
+    fun getNotificationId(prayerName: String): Int =
+        NOTIFICATION_ID_BASE + kotlin.math.abs(prayerName.hashCode() % 1000)
 }
