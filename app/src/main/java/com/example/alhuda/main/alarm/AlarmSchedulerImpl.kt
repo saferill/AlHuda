@@ -9,6 +9,7 @@ import android.util.Log
 import com.example.alhuda.core.domain.alarm.AlarmScheduler
 import com.example.alhuda.core.domain.model.PrayerTime
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.time.LocalDateTime
 import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,15 +22,20 @@ class AlarmSchedulerImpl @Inject constructor(
     private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
 
     override fun scheduleAlarm(prayerTime: PrayerTime) {
-        val triggerEpochMillis = prayerTime.time
+        var targetTime: LocalDateTime = prayerTime.time
+        var triggerEpochMillis = targetTime
             .atZone(ZoneId.systemDefault())
             .toInstant()
             .toEpochMilli()
 
-        // Hanya jadwalkan jika waktu belum lewat
+        // Jika waktu sholat hari ini sudah lewat, jadwalkan untuk besok di jam yang sama (+1 hari)
         if (triggerEpochMillis <= System.currentTimeMillis()) {
-            Log.d("AlarmScheduler", "Skipping ${prayerTime.name}, time already passed.")
-            return
+            targetTime = targetTime.plusDays(1)
+            triggerEpochMillis = targetTime
+                .atZone(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli()
+            Log.d("AlarmScheduler", "Waktu ${prayerTime.name} hari ini telah lewat. Dijadwalkan untuk besok: $targetTime")
         }
 
         val intent = Intent(context, AlarmReceiver::class.java).apply {
@@ -66,9 +72,9 @@ class AlarmSchedulerImpl @Inject constructor(
                         pendingIntent
                     )
                 }
-                Log.d("AlarmScheduler", "Alarm scheduled for ${prayerTime.name} at ${prayerTime.time}")
+                Log.d("AlarmScheduler", "Alarm BERHASIL dijadwalkan untuk ${prayerTime.name} pada $targetTime (Epoch: $triggerEpochMillis)")
             } catch (e: SecurityException) {
-                Log.e("AlarmScheduler", "Failed to schedule exact alarm: ${e.message}")
+                Log.e("AlarmScheduler", "Gagal menjadwalkan exact alarm: ${e.message}")
             }
         }
     }
@@ -85,7 +91,7 @@ class AlarmSchedulerImpl @Inject constructor(
         if (pendingIntent != null && alarmManager != null) {
             alarmManager.cancel(pendingIntent)
             pendingIntent.cancel()
-            Log.d("AlarmScheduler", "Alarm cancelled for $prayerName")
+            Log.d("AlarmScheduler", "Alarm dibatalkan untuk $prayerName")
         }
     }
 
