@@ -25,7 +25,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
@@ -71,6 +73,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.alhuda.core.domain.model.PrayerTime
 import com.example.alhuda.main.location.LocationScreen
 import com.example.alhuda.main.settings.SettingsScreen
+import com.example.alhuda.main.upcoming_alarms.UpcomingAlarmsScreen
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 
@@ -81,6 +84,7 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showLocationScreen by remember { mutableStateOf(false) }
     var showSettingsScreen by remember { mutableStateOf(false) }
+    var showUpcomingAlarmsScreen by remember { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     // Auto-refresh permission state when returning from Android Settings
@@ -129,11 +133,19 @@ fun HomeScreen(
                 viewModel.loadPrayerTimes()
             }
         )
+    } else if (showUpcomingAlarmsScreen) {
+        UpcomingAlarmsScreen(
+            onNavigateBack = {
+                showUpcomingAlarmsScreen = false
+                viewModel.loadPrayerTimes()
+            }
+        )
     } else {
         HomeContent(
             uiState = uiState,
             onOpenLocation = { showLocationScreen = true },
             onOpenSettings = { showSettingsScreen = true },
+            onOpenUpcomingAlarms = { showUpcomingAlarmsScreen = true },
             onDismissBatteryBanner = { viewModel.dismissBatteryBanner() },
             onTestAlarm = { seconds, prayerName ->
                 viewModel.testAlarmInSeconds(seconds, prayerName)
@@ -148,6 +160,7 @@ private fun HomeContent(
     uiState: HomeUiState,
     onOpenLocation: () -> Unit,
     onOpenSettings: () -> Unit = {},
+    onOpenUpcomingAlarms: () -> Unit = {},
     onDismissBatteryBanner: () -> Unit = {},
     onTestAlarm: (Long, String) -> Unit = { _, _ -> }
 ) {
@@ -442,32 +455,17 @@ private fun HomeContent(
                                         .padding(24.dp)
                                 ) {
                                     Column {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column {
-                                                Text(
-                                                    text = "Lokasi Aktif",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = Color.White.copy(alpha = 0.8f)
-                                                )
-                                                Text(
-                                                    text = uiState.locationName.ifBlank { "Mencari Lokasi..." },
-                                                    style = MaterialTheme.typography.titleLarge,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color.White
-                                                )
-                                            }
-
-                                            Icon(
-                                                imageVector = Icons.Default.Notifications,
-                                                contentDescription = null,
-                                                tint = Color.White.copy(alpha = 0.9f),
-                                                modifier = Modifier.size(36.dp)
-                                            )
-                                        }
+                                        Text(
+                                            text = "Lokasi Aktif",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = Color.White.copy(alpha = 0.8f)
+                                        )
+                                        Text(
+                                            text = uiState.locationName.ifBlank { "Mencari Lokasi..." },
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
 
                                         if (uiState.latitude != null && uiState.longitude != null) {
                                             Spacer(modifier = Modifier.height(8.dp))
@@ -482,13 +480,74 @@ private fun HomeContent(
                             }
                         }
 
+                        // 3b. Row / Card Shortcut Alarm Mendatang
+                        item {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .clickable(onClick = onOpenUpcomingAlarms),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primaryContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.DateRange,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(14.dp))
+
+                                    Column(
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(
+                                            text = "Lihat Alarm Mendatang",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "${uiState.enabledPrayersCount} dari 5 alarm sholat aktif",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = "Buka",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+
                         // 4. Header Daftar Jadwal
                         item {
                             Text(
                                 text = "Waktu Sholat Hari Ini",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(top = 8.dp)
+                                modifier = Modifier.padding(top = 4.dp)
                             )
                         }
 

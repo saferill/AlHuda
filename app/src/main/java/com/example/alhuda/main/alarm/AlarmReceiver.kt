@@ -11,6 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -31,7 +32,33 @@ class AlarmReceiver : BroadcastReceiver() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // 1. Bangunkan layar & CPU menggunakan WakeLock
+                // 1. Ambil pengaturan aplikasi
+                val settings = try {
+                    appSettingsRepository.getSettings().firstOrNull()
+                } catch (e: Exception) {
+                    null
+                }
+
+                // Cek apakah alarm untuk sholat ini dinonaktifkan secara permanen
+                val enabledPrayers = settings?.enabledPrayers ?: setOf("Subuh", "Dzuhur", "Ashar", "Maghrib", "Isya")
+                val isEnabled = enabledPrayers.any { it.equals(prayerName, ignoreCase = true) }
+                if (!isEnabled) {
+                    Log.d("AlarmReceiver", "Alarm untuk $prayerName dinonaktifkan permanen di pengaturan. Trigger dibatalkan.")
+                    return@launch
+                }
+
+                // Cek apakah alarm untuk sholat hari ini di-skip sekali
+                val today = LocalDate.now()
+                val isSkipped = settings?.skippedOccurrences?.any {
+                    it.prayerName.equals(prayerName, ignoreCase = true) && it.date == today
+                } == true
+
+                if (isSkipped) {
+                    Log.d("AlarmReceiver", "Alarm untuk $prayerName dilewati untuk tanggal $today. Trigger dibatalkan.")
+                    return@launch
+                }
+
+                // 2. Bangunkan layar & CPU menggunakan WakeLock
                 val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
                 @Suppress("DEPRECATION")
                 val wakeLock = powerManager?.newWakeLock(
@@ -42,15 +69,8 @@ class AlarmReceiver : BroadcastReceiver() {
                 )
                 wakeLock?.acquire(30000) // Tahan wake lock selama 30 detik
 
-                // 2. Ambil URI suara adzan dari pengaturan
-                val settings = try {
-                    appSettingsRepository.getSettings().firstOrNull()
-                } catch (e: Exception) {
-                    null
-                }
+                // 3. Putar suara adzan
                 val adhanSoundUri = settings?.adhanSoundUri
-
-                // 3. Putar suara adzan (menggunakan custom URI jika ada, fallback ke default)
                 AdhanAudioPlayer.play(context, prayerName, adhanSoundUri)
 
                 // 4. Tampilkan notifikasi dengan Full Screen Intent

@@ -15,5 +15,6 @@ data class HomeUiState(
     val isExactAlarmPermissionGranted: Boolean = true,
     val isIgnoringBatteryOptimizations: Boolean = true,
     val isBatteryBannerDismissed: Boolean = false,
+    val enabledPrayersCount: Int = 5,
     val errorMessage: String? = null
 )

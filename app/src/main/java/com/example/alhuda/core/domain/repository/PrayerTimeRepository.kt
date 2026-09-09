@@ -5,6 +5,7 @@ import com.example.alhuda.core.domain.model.PrayerTime
 
 interface PrayerTimeRepository {
     suspend fun getTodayPrayerTimes(location: LocationCoordinates): List<PrayerTime>
+    suspend fun getPrayerTimesForDate(location: LocationCoordinates, date: java.time.LocalDate): List<PrayerTime>
     suspend fun saveLastLocation(location: LocationCoordinates)
     suspend fun getLastLocation(): LocationCoordinates?
 }

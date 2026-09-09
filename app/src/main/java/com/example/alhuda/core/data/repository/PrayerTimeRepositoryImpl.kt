@@ -31,16 +31,22 @@ class PrayerTimeRepositoryImpl(
         private val KEY_LONGITUDE = doublePreferencesKey("longitude")
     }
 
-    @OptIn(kotlin.time.ExperimentalTime::class)
     override suspend fun getTodayPrayerTimes(location: LocationCoordinates): List<PrayerTime> {
+        return getPrayerTimesForDate(location, LocalDate.now())
+    }
+
+    @OptIn(kotlin.time.ExperimentalTime::class)
+    override suspend fun getPrayerTimesForDate(
+        location: LocationCoordinates,
+        date: LocalDate
+    ): List<PrayerTime> {
         val settings = appSettingsRepository.getSettings().firstOrNull()
         val appMethod = settings?.calculationMethod ?: AppCalculationMethod.KEMENAG_INDONESIA
 
         val calculationParameters = getCalculationParameters(appMethod)
 
         val coordinates = Coordinates(location.latitude, location.longitude)
-        val today = LocalDate.now()
-        val dateComponents = DateComponents(today.year, today.monthValue, today.dayOfMonth)
+        val dateComponents = DateComponents(date.year, date.monthValue, date.dayOfMonth)
 
         val prayerTimes = PrayerTimes(coordinates, dateComponents, calculationParameters)
         val zoneId = ZoneId.systemDefault()

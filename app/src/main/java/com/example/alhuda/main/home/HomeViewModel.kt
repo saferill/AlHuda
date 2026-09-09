@@ -42,11 +42,15 @@ class HomeViewModel @Inject constructor(
 
     private fun observeSettingsChanges() {
         viewModelScope.launch {
-            // Drop initial emission to avoid redundant initial recalculation
-            appSettingsRepository.getSettings().drop(1).collect {
+            appSettingsRepository.getSettings().collect { settings ->
                 val state = _uiState.value
                 val lat = state.latitude
                 val lng = state.longitude
+                _uiState.update {
+                    it.copy(
+                        enabledPrayersCount = settings.enabledPrayers.size
+                    )
+                }
                 if (lat != null && lng != null && !state.needsLocationSelection) {
                     calculateAndSchedule(
                         coordinates = LocationCoordinates(lat, lng),

@@ -4,11 +4,14 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.example.alhuda.core.domain.model.AppCalculationMethod
 import com.example.alhuda.core.domain.model.AppSettings
+import com.example.alhuda.core.domain.model.SkippedOccurrence
 import com.example.alhuda.core.domain.repository.AppSettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,6 +24,9 @@ class AppSettingsRepositoryImpl @Inject constructor(
         private val KEY_CALCULATION_METHOD = stringPreferencesKey("app_calculation_method")
         private val KEY_ADHAN_SOUND_URI = stringPreferencesKey("app_adhan_sound_uri")
         private val KEY_ADHAN_SOUND_NAME = stringPreferencesKey("app_adhan_sound_name")
+        private val KEY_ENABLED_PRAYERS = stringSetPreferencesKey("app_enabled_prayers")
+        private val KEY_SKIPPED_OCCURRENCES = stringSetPreferencesKey("app_skipped_occurrences")
+        private val DEFAULT_ENABLED_PRAYERS = setOf("Subuh", "Dzuhur", "Ashar", "Maghrib", "Isya")
     }
 
     override fun getSettings(): Flow<AppSettings> {
@@ -35,11 +41,17 @@ class AppSettingsRepositoryImpl @Inject constructor(
 
             val adhanUri = prefs[KEY_ADHAN_SOUND_URI]
             val adhanName = prefs[KEY_ADHAN_SOUND_NAME]
+            val enabledPrayers = prefs[KEY_ENABLED_PRAYERS] ?: DEFAULT_ENABLED_PRAYERS
+
+            val rawSkipped = prefs[KEY_SKIPPED_OCCURRENCES] ?: emptySet()
+            val skippedOccurrences = rawSkipped.mapNotNull { SkippedOccurrence.fromSerializedString(it) }.toSet()
 
             AppSettings(
                 calculationMethod = method,
                 adhanSoundUri = adhanUri,
-                adhanSoundName = adhanName
+                adhanSoundName = adhanName,
+                enabledPrayers = enabledPrayers,
+                skippedOccurrences = skippedOccurrences
             )
         }
     }
@@ -57,6 +69,8 @@ class AppSettingsRepositoryImpl @Inject constructor(
             } else {
                 prefs.remove(KEY_ADHAN_SOUND_NAME)
             }
+            prefs[KEY_ENABLED_PRAYERS] = settings.enabledPrayers
+            prefs[KEY_SKIPPED_OCCURRENCES] = settings.skippedOccurrences.map { it.toSerializedString() }.toSet()
         }
     }
 
@@ -78,6 +92,43 @@ class AppSettingsRepositoryImpl @Inject constructor(
             } else {
                 prefs.remove(KEY_ADHAN_SOUND_NAME)
             }
+        }
+    }
+
+    override suspend fun togglePrayerEnabled(prayerName: String) {
+        dataStore.edit { prefs ->
+            val current = (prefs[KEY_ENABLED_PRAYERS] ?: DEFAULT_ENABLED_PRAYERS).toMutableSet()
+            if (current.contains(prayerName)) {
+                current.remove(prayerName)
+            } else {
+                current.add(prayerName)
+            }
+            prefs[KEY_ENABLED_PRAYERS] = current
+        }
+    }
+
+    override suspend fun toggleSkipOccurrence(prayerName: String, date: LocalDate) {
+        val target = SkippedOccurrence(prayerName, date).toSerializedString()
+        dataStore.edit { prefs ->
+            val current = (prefs[KEY_SKIPPED_OCCURRENCES] ?: emptySet()).toMutableSet()
+            if (current.contains(target)) {
+                current.remove(target)
+            } else {
+                current.add(target)
+            }
+            prefs[KEY_SKIPPED_OCCURRENCES] = current
+        }
+    }
+
+    override suspend fun cleanExpiredSkippedOccurrences() {
+        val today = LocalDate.now()
+        dataStore.edit { prefs ->
+            val current = prefs[KEY_SKIPPED_OCCURRENCES] ?: emptySet()
+            val valid = current.filter { str ->
+                val occ = SkippedOccurrence.fromSerializedString(str)
+                occ != null && !occ.date.isBefore(today)
+            }.toSet()
+            prefs[KEY_SKIPPED_OCCURRENCES] = valid
         }
     }
 }
