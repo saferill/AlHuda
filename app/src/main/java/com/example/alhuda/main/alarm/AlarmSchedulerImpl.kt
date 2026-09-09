@@ -21,7 +21,20 @@ class AlarmSchedulerImpl @Inject constructor(
 
     private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
 
-    override fun scheduleAlarm(prayerTime: PrayerTime) {
+    override fun canScheduleExactAlarms(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            alarmManager?.canScheduleExactAlarms() ?: false
+        } else {
+            true
+        }
+    }
+
+    override fun scheduleAlarm(prayerTime: PrayerTime): Boolean {
+        if (!canScheduleExactAlarms()) {
+            Log.w("AlarmScheduler", "Tidak dapat menjadwalkan exact alarm: Izin SCHEDULE_EXACT_ALARM belum di-grant (Android 12+)")
+            return false
+        }
+
         var targetTime: LocalDateTime = prayerTime.time
         var triggerEpochMillis = targetTime
             .atZone(ZoneId.systemDefault())
@@ -49,33 +62,30 @@ class AlarmSchedulerImpl @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        alarmManager?.let { manager ->
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    if (manager.canScheduleExactAlarms()) {
-                        manager.setExactAndAllowWhileIdle(
-                            AlarmManager.RTC_WAKEUP,
-                            triggerEpochMillis,
-                            pendingIntent
-                        )
-                    } else {
-                        manager.setAndAllowWhileIdle(
-                            AlarmManager.RTC_WAKEUP,
-                            triggerEpochMillis,
-                            pendingIntent
-                        )
-                    }
-                } else {
+        return try {
+            alarmManager?.let { manager ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     manager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerEpochMillis,
+                        pendingIntent
+                    )
+                } else {
+                    manager.setExact(
                         AlarmManager.RTC_WAKEUP,
                         triggerEpochMillis,
                         pendingIntent
                     )
                 }
                 Log.d("AlarmScheduler", "Alarm BERHASIL dijadwalkan untuk ${prayerTime.name} pada $targetTime (Epoch: $triggerEpochMillis)")
-            } catch (e: SecurityException) {
-                Log.e("AlarmScheduler", "Gagal menjadwalkan exact alarm: ${e.message}")
-            }
+                true
+            } ?: false
+        } catch (e: SecurityException) {
+            Log.e("AlarmScheduler", "SecurityException saat scheduleAlarm: ${e.message}")
+            false
+        } catch (e: Exception) {
+            Log.e("AlarmScheduler", "Gagal menjadwalkan alarm: ${e.message}")
+            false
         }
     }
 
@@ -95,9 +105,17 @@ class AlarmSchedulerImpl @Inject constructor(
         }
     }
 
-    override fun rescheduleAllAlarms(prayerTimes: List<PrayerTime>) {
-        prayerTimes.forEach { prayerTime ->
-            scheduleAlarm(prayerTime)
+    override fun rescheduleAllAlarms(prayerTimes: List<PrayerTime>): Boolean {
+        if (!canScheduleExactAlarms()) {
+            Log.w("AlarmScheduler", "rescheduleAllAlarms dibatalkan karena izin exact alarm belum aktif")
+            return false
         }
+
+        var allSuccess = true
+        prayerTimes.forEach { prayerTime ->
+            val success = scheduleAlarm(prayerTime)
+            if (!success) allSuccess = false
+        }
+        return allSuccess
     }
 }

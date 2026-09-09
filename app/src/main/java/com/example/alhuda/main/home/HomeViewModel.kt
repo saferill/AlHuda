@@ -3,13 +3,14 @@ package com.example.alhuda.main.home
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.alhuda.core.domain.alarm.AlarmScheduler
 import com.example.alhuda.core.domain.model.FavoriteLocation
 import com.example.alhuda.core.domain.model.LocationCoordinates
 import com.example.alhuda.core.domain.model.PrayerTime
 import com.example.alhuda.core.domain.repository.FavoriteLocationsRepository
 import com.example.alhuda.core.domain.repository.PrayerTimeRepository
+import com.example.alhuda.core.util.android.BatteryUtils
 import com.example.alhuda.core.util.android.LocationUtils
-import com.example.alhuda.core.domain.alarm.AlarmScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,7 +18,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
 
@@ -36,9 +36,25 @@ class HomeViewModel @Inject constructor(
         loadPrayerTimes()
     }
 
+    fun refreshPermissionsState() {
+        val canScheduleExact = alarmScheduler.canScheduleExactAlarms()
+        val isIgnoringBattery = BatteryUtils.isIgnoringBatteryOptimizations(context)
+        _uiState.update {
+            it.copy(
+                isExactAlarmPermissionGranted = canScheduleExact,
+                isIgnoringBatteryOptimizations = isIgnoringBattery
+            )
+        }
+    }
+
+    fun dismissBatteryBanner() {
+        _uiState.update { it.copy(isBatteryBannerDismissed = true) }
+    }
+
     fun loadPrayerTimes() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            refreshPermissionsState()
 
             // 1. Coba ambil dari lokasi yang dipilih di FavoriteLocationsRepository
             val selectedFav: FavoriteLocation? = favoriteLocationsRepository.getSelectedLocation()
@@ -86,7 +102,9 @@ class HomeViewModel @Inject constructor(
             val times = prayerTimeRepository.getTodayPrayerTimes(coordinates)
 
             // Jadwalkan alarm notifikasi adzan untuk semua waktu sholat
-            alarmScheduler.rescheduleAllAlarms(times)
+            val isScheduled = alarmScheduler.rescheduleAllAlarms(times)
+            val canScheduleExact = alarmScheduler.canScheduleExactAlarms()
+            val isIgnoringBattery = BatteryUtils.isIgnoringBatteryOptimizations(context)
 
             _uiState.update {
                 it.copy(
@@ -96,6 +114,8 @@ class HomeViewModel @Inject constructor(
                     longitude = coordinates.longitude,
                     isLoading = false,
                     needsLocationSelection = false,
+                    isExactAlarmPermissionGranted = canScheduleExact,
+                    isIgnoringBatteryOptimizations = isIgnoringBattery,
                     errorMessage = null
                 )
             }

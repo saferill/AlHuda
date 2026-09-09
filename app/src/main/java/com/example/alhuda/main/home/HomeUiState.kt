@@ -12,5 +12,8 @@ data class HomeUiState(
     val longitude: Double? = null,
     val isLoading: Boolean = false,
     val needsLocationSelection: Boolean = false,
+    val isExactAlarmPermissionGranted: Boolean = true,
+    val isIgnoringBatteryOptimizations: Boolean = true,
+    val isBatteryBannerDismissed: Boolean = false,
     val errorMessage: String? = null
 )
