@@ -25,4 +25,10 @@ abstract class RepositoryModule {
     abstract fun bindFavoriteLocationsRepository(
         impl: FavoriteLocationsRepositoryImpl
     ): FavoriteLocationsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindGeoInfoRepository(
+        impl: com.example.alhuda.core.data.repository.GeoInfoRepositoryImpl
+    ): com.example.alhuda.core.domain.repository.GeoInfoRepository
 }
